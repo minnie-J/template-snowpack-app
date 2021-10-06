@@ -4,7 +4,7 @@
     "module": "esnext",
     "target": "esnext",
     "moduleResolution": "node",
-    "jsx": "preserve",
+    "jsx": "react-jsx",
     "baseUrl": "./",
     /* paths - import rewriting/resolving */
     "paths": {
@@ -22,6 +22,12 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "allowSyntheticDefaultImports": true,
-    "importsNotUsedAsValues": "error"
+    "importsNotUsedAsValues": "error",
+
+    "esModuleInterop": true,
+    // "lib": ["dom", "dom.iterable", "esnext"],
+    "isolatedModules": true,
+    "downlevelIteration": true,
+    "noFallthroughCasesInSwitch": true
   }
 }

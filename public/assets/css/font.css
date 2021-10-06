@@ -1,0 +1,97 @@
+@font-face {
+  font-family: 'Noto Sans KR';
+  font-style: normal;
+  font-weight: 100;
+  font-display: block;
+  src: local('Noto Sans KR Thin'), local('NotoSansKR-Thin'),
+    url('/assets/fonts/NotoSansKR-Thin.otf') format('opentype');
+}
+
+@font-face {
+  font-family: 'Noto Sans KR';
+  font-style: normal;
+  font-weight: 300;
+  font-display: block;
+  src: local('Noto Sans KR Light'), local('NotoSansKR-Light'),
+    url('/assets/fonts/NotoSansKR-Light.otf') format('opentype');
+}
+
+@font-face {
+  font-family: 'Noto Sans KR';
+  font-style: normal;
+  font-weight: 400;
+  font-weight: normal;
+  font-display: block;
+  src: local('Noto Sans KR Regular'), local('NotoSansKR-Regular'),
+    url('/assets/fonts/NotoSansKR-Regular.otf') format('opentype');
+}
+
+@font-face {
+  font-family: 'Noto Sans KR';
+  font-style: normal;
+  font-weight: 500;
+  font-display: block;
+  src: local('Noto Sans KR Medium'), local('NotoSansKR-Medium'),
+    url('/assets/fonts/NotoSansKR-Medium.otf') format('opentype');
+}
+
+@font-face {
+  font-family: 'Noto Sans KR';
+  font-style: normal;
+  font-weight: 700;
+  font-weight: bold;
+  font-display: block;
+  src: local('Noto Sans KR Bold'), local('NotoSansKR-Bold'),
+    url('/assets/fonts/NotoSansKR-Bold.otf') format('opentype');
+}
+
+@font-face {
+  font-family: 'Noto Sans KR';
+  font-style: normal;
+  font-weight: 900;
+  font-display: block;
+  src: local('Noto Sans KR Black'), local('NotoSansKR-Black'),
+    url('/assets/fonts/NotoSansKR-Black.otf') format('opentype');
+}
+
+/* Roboto */
+@font-face {
+  font-family: 'Roboto-light';
+  font-style: normal;
+  font-weight: 300;
+  font-display: block;
+  src: local('Roboto Light'), local('Roboto-Light'),
+    url('/assets/fonts/Roboto-Light.otf') format('opentype');
+}
+@font-face {
+  font-family: 'Roboto-regular';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: local('Roboto Regular'), local('Roboto-Regular'),
+    url('/assets/fonts/Roboto-Regular.otf') format('opentype');
+}
+@font-face {
+  font-family: 'Roboto-medium';
+  font-style: normal;
+  font-weight: 500;
+  font-display: block;
+  src: local('Roboto Medium'), local('Roboto-Medium'),
+    url('/assets/fonts/Roboto-Medium.otf') format('opentype');
+}
+@font-face {
+  font-family: 'Roboto-bold';
+  font-style: normal;
+  font-weight: 700;
+  font-display: block;
+  src: local('Roboto Bold'), local('Roboto-Bold'),
+    url('/assets/fonts/Roboto-Bold.otf') format('opentype');
+}
+@font-face {
+  font-family: 'Roboto-black';
+  font-style: normal;
+  font-weight: 900;
+  font-display: block;
+  src: local('Roboto Black'), local('Roboto-Black'),
+    url('/assets/fonts/Roboto-Black.otf') format('opentype');
+}
