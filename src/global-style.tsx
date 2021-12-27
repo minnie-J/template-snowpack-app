@@ -2,6 +2,8 @@ import { createGlobalStyle } from "styled-components";
 import reset from "styled-reset";
 
 import "antd/dist/antd.css";
+import "react-grid-layout/css/styles.css";
+import "react-resizable/css/styles.css";
 
 import "../public/assets/css/font.css";
 
