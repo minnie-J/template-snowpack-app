@@ -1,5 +1,7 @@
 import styled from "styled-components";
 
+import GridContainer from "./components/organisms/grid-container/grid-container";
+
 const Container = styled.div`
 	height: 100%;
 	display: flex;
@@ -26,6 +28,8 @@ const LeftContainer = styled.div`
 	width: 300px;
 	display: flex;
 	flex-direction: column;
+
+	border: 1px solid;
 `;
 
 const RightContainer = styled.div`
@@ -39,7 +43,9 @@ const App = () => {
 			<HeaderArea>Header Area</HeaderArea>
 			<MainArea>
 				<LeftContainer>Widget List Area</LeftContainer>
-				<RightContainer>test!</RightContainer>
+				<RightContainer>
+					<GridContainer />
+				</RightContainer>
 			</MainArea>
 		</Container>
 	);
