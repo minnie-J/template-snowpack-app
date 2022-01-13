@@ -133,20 +133,33 @@ const GridContainer = () => {
 		Map<string, { groupMaxHeight: number }>
 	>(new Map());
 
+	const [tempWidgetsByGroup, changeTempWidgetsByGroup] = useState<
+		Map<string, Set<string>>
+	>(new Map());
+
 	// NOTE 전체 닫은 그룹 소속 위젯 아이디 목록
 	const closedWidgets = useMemo(
 		() =>
 			[...closedGroups.keys()].reduce(
-				(closedWidgetIds: Set<string>, closedGroupId: string) =>
-					!widgetsByGroup.has(closedGroupId)
-						? closedWidgetIds
-						: new Set([
-								...closedWidgetIds,
-								...(widgetsByGroup.get(closedGroupId) as Set<string>),
-						  ]),
+				(closedWidgetIds: Set<string>, closedGroupId: string) => {
+					if (!widgetsByGroup.has(closedGroupId)) return closedWidgetIds;
+
+					const closedWidgets = widgetsByGroup.get(
+						closedGroupId,
+					) as Set<string>;
+					const tempWidgets = tempWidgetsByGroup.get(closedGroupId);
+
+					tempWidgets &&
+						[...tempWidgets].forEach(
+							(widgetId) =>
+								closedWidgets.has(widgetId) && closedWidgets.delete(widgetId),
+						);
+
+					return new Set([...closedWidgetIds, ...closedWidgets]);
+				},
 				new Set(),
 			),
-		[closedGroups, widgetsByGroup],
+		[closedGroups, tempWidgetsByGroup, widgetsByGroup],
 	);
 
 	// NOTE 실제 화면상에 출력되는 아이템 목록
@@ -237,6 +250,12 @@ const GridContainer = () => {
 					groupMaxHeight: number;
 				};
 
+				tempWidgetsByGroup.has(groupId) &&
+					changeTempWidgetsByGroup((temp) => {
+						temp.delete(groupId);
+						return temp;
+					});
+
 				// 하위 위젯이 있는 경우 오픈 그룹 보다 y값이 큰 아이템 모두 y값 업데이트 처리
 				if (groupMaxHeight > 0) {
 					changeAllItems(changeYvalues({ isOpen: true, groupMaxHeight }));
@@ -304,7 +323,7 @@ const GridContainer = () => {
 
 			changeClosedGroups(collapseGroups);
 		},
-		[allItems, closedGroups, closedWidgets, widgetsByGroup],
+		[allItems, closedGroups, closedWidgets, tempWidgetsByGroup, widgetsByGroup],
 	);
 
 	// NOTE 아이템 드래그 시 이동 가능한 영역인지 판단
@@ -346,8 +365,57 @@ const GridContainer = () => {
 			// 드래그가 끝났으로 드래그 가능 영역 체크 초기화 처리
 			isDraggableArea.current = false;
 
-			// 위젯 이동인 경우
-			if (!groups.has(originItem.i)) {
+			// -------------------------------
+
+			const items = new Map(allItems);
+
+			// 그룹 이동일 때
+			if (groups.has(originItem.i)) {
+				console.log("group!");
+				// 변경된 y값 (최대 높이 제한)
+				const currentItemY = Math.min(
+					changedItem.y,
+					Math.max.apply(
+						null,
+						layout
+							.filter(({ i }) => i !== originItem.i)
+							.map(({ y, h }) => y + h),
+					),
+				);
+
+				layout.forEach((item) => {
+					const itemId = item.i;
+					const originValue = items.get(itemId) as ItemProps;
+					const originY = originValue.y;
+
+					// 현재 돌고 있는 item이 닫혀있는 그룹인 경우 하위 위젯 처리
+					if (closedGroups.has(itemId) && widgetsByGroup.has(itemId)) {
+						// const movedYvalue = currentItemY - originY;
+						const movedYvalue =
+							itemId === originItem.i
+								? currentItemY - originY
+								: item.y - originY;
+
+						[...(widgetsByGroup.get(itemId) as Set<string>)].forEach(
+							(widgetId) => {
+								const { y: originY, ...widget } = items.get(
+									widgetId,
+								) as ItemProps;
+
+								items.set(widgetId, { ...widget, y: originY + movedYvalue });
+							},
+						);
+					}
+
+					// 나머지 모든 아이템 변경 사항 저장
+					itemId === originItem.i
+						? items.set(itemId, { ...originValue, ...item, y: currentItemY })
+						: items.set(itemId, { ...originValue, ...item });
+				});
+				// 그룹 이동 끝!
+			} else {
+				console.log("widget!");
+				// 위젯 이동인 경우
 				// 원 소속 그룹 ID
 				const originGroupId = getGroupId({ widgetId: originItem.i });
 
@@ -357,144 +425,434 @@ const GridContainer = () => {
 					.sort(({ y: a }, { y: b }) => b - a)
 					.find(({ y }) => y < changedItem.y) as ItemProps;
 
-				// 그룹 ID 다르면 소속 그룹 변경 처리
+				// 변경된 y값 (최대 높이 제한)
+				const currentItemY = Math.min(
+					changedItem.y,
+					Math.max.apply(
+						null,
+						layout
+							.filter(({ i }) => i !== originItem.i)
+							.map(({ y, h }) => y + h),
+					),
+				);
+
+				// 다른 그룹 && 닫혀있는 그룹으로 이동한 경우
+				if (closedGroups.has(currentGroup.i)) {
+					console.log("닫힌 그룹으로 이동");
+					// const { groupMaxHeight } = closedGroups.get(currentGroup.i) as {
+					// 	groupMaxHeight: number;
+					// };
+
+					// changeTempWidgets((widgets) => {
+					// 	widgets = new Map(widgets);
+					// 	widgets.set(originItem, i);
+					// 	return widgets;
+					// });
+					changeTempWidgetsByGroup((tempWidgets) => {
+						tempWidgets = new Map(tempWidgets);
+						tempWidgets.has(currentGroup.i)
+							? tempWidgets.set(
+									currentGroup.i,
+									(tempWidgets.get(currentGroup.i) as Set<string>).add(
+										originItem.i,
+									),
+							  )
+							: tempWidgets.set(currentGroup.i, new Set([originItem.i]));
+						return tempWidgets;
+					});
+
+					// 이동하는 그룹 소속 위젯이 없을 때
+					// if (groupMaxHeight === 0) {
+					// 	layout.forEach((item) => {
+					// 		console.log("하위 위젯 없음");
+					// 		const itemId = item.i;
+					// 		const originValue = items.get(itemId) as ItemProps;
+					// 		const originY = originValue.y;
+
+					// 		// 현재 돌고 있는 item이 닫혀있는 그룹인 경우 하위 위젯 처리
+					// 		if (
+					// 			originY !== item.y &&
+					// 			closedGroups.has(itemId) &&
+					// 			widgetsByGroup.has(itemId)
+					// 		) {
+					// 			const movedYvalue = originY - item.y;
+
+					// 			[...(widgetsByGroup.get(itemId) as Set<string>)].forEach(
+					// 				(widgetId) => {
+					// 					const { y: originY, ...widget } = items.get(
+					// 						widgetId,
+					// 					) as ItemProps;
+
+					// 					items.set(widgetId, {
+					// 						...widget,
+					// 						y: originY + movedYvalue,
+					// 					});
+					// 				},
+					// 			);
+					// 		}
+
+					// 		// 나머지 모든 아이템 변경 사항 저장
+					// 		item.i === currentGroup.i
+					// 			? items.set(itemId, {
+					// 					...originValue,
+					// 					...item,
+					// 					isDraggable: true,
+					// 			  })
+					// 			: item.i === originItem.i
+					// 			? items.set(itemId, {
+					// 					...originValue,
+					// 					...item,
+					// 					y: currentItemY,
+					// 			  })
+					// 			: items.set(itemId, { ...originValue, ...item });
+					// 	});
+					// } else {
+					// 	console.log("하위 위젯 있음");
+					// 	layout.forEach((item) => {
+					// 		const itemId = item.i;
+					// 		const originValue = items.get(itemId) as ItemProps;
+					// 		const originY = originValue.y;
+
+					// 		if (item.y > currentGroup.y && itemId !== originItem.i) {
+					// 			console.log("이동 그룹보다 y값이 큰 경우!");
+					// 			console.log("key: ", itemId);
+					// 			console.log("y: ", item.y);
+					// 			if (
+					// 				originY !== item.y &&
+					// 				closedGroups.has(itemId) &&
+					// 				widgetsByGroup.has(itemId)
+					// 			) {
+					// 				const movedYvalue = originY - item.y;
+
+					// 				[...(widgetsByGroup.get(itemId) as Set<string>)].forEach(
+					// 					(widgetId) => {
+					// 						const { y: originY, ...widget } = items.get(
+					// 							widgetId,
+					// 						) as ItemProps;
+
+					// 						// items.set(widgetId, {
+					// 						// 	...widget,
+					// 						// 	y: originY + movedYvalue + groupMaxHeight,
+					// 						// });
+					// 						items.set(widgetId, {
+					// 							...widget,
+					// 							y: originY + movedYvalue,
+					// 						});
+					// 					},
+					// 				);
+					// 			}
+
+					// 			console.log("item.y: ", item.y);
+					// 			console.log("item.y+groupMaxHeight: ", item.y + groupMaxHeight);
+
+					// 			// items.set(itemId, {
+					// 			// 	...originValue,
+					// 			// 	...item,
+					// 			// 	y: item.y + groupMaxHeight,
+					// 			// });
+					// 			items.set(itemId, {
+					// 				...originValue,
+					// 				...item,
+					// 			});
+					// 		}
+					// 		// else {
+					// 		// 	// 나머지 모든 아이템 변경 사항 저장
+					// 		// 	item.i === currentGroup.i
+					// 		// 		? items.set(itemId, {
+					// 		// 				...originValue,
+					// 		// 				...item,
+					// 		// 				isDraggable: true,
+					// 		// 		  })
+					// 		// 		: item.i === originItem.i
+					// 		// 		? items.set(itemId, {
+					// 		// 				...originValue,
+					// 		// 				...item,
+					// 		// 				y: currentItemY,
+					// 		// 		  })
+					// 		// 		: items.set(itemId, { ...originValue, ...item });
+					// 		// }
+					// 		item.i === currentGroup.i
+					// 			? items.set(itemId, {
+					// 					...originValue,
+					// 					...item,
+					// 					isDraggable: true,
+					// 			  })
+					// 			: item.i === originItem.i
+					// 			? items.set(itemId, {
+					// 					...originValue,
+					// 					...item,
+					// 					y: currentItemY,
+					// 			  })
+					// 			: items.set(itemId, { ...originValue, ...item });
+					// 	});
+					// }
+
+					// changeClosedGroups((groups) => {
+					// 	groups = new Map(groups);
+					// 	groups.delete(currentGroup.i);
+					// 	return groups;
+					// });
+				}
+				// else {
+				// 	console.log("닫힌 그룹 아님");
+
+				// 	layout.forEach((item) => {
+				// 		const itemId = item.i;
+				// 		const originValue = items.get(itemId) as ItemProps;
+
+				// 		item.i === originItem.i
+				// 			? items.set(itemId, {
+				// 					...originValue,
+				// 					...item,
+				// 					y: currentItemY,
+				// 			  })
+				// 			: items.set(itemId, { ...originValue, ...item });
+				// 	});
+				// }
+
+				// 그룹 다르면 소속 그룹 변경 처리
+
 				if (originGroupId !== currentGroup.i) {
+					console.log("그룹 변경");
 					// 그룹 변경
 					changeWidgetsByGroup((widgetsByGroup) => {
 						widgetsByGroup = new Map(widgetsByGroup);
 
-						const originGroupWidgets = widgetsByGroup.get(
-							originGroupId,
-						) as Set<string>;
+						const originGroupWidgets = [
+							...(widgetsByGroup.get(originGroupId) as Set<string>),
+						].filter((widgetId) => widgetId !== originItem.i);
 
-						originGroupWidgets.delete(originItem.i);
-						originGroupWidgets.size
-							? widgetsByGroup.set(originGroupId, originGroupWidgets)
+						const currentGroupWidgets = [
+							...(widgetsByGroup.get(currentGroup.i) || new Set()),
+							originItem.i,
+						];
+
+						widgetsByGroup.set(currentGroup.i, new Set(currentGroupWidgets));
+
+						originGroupWidgets.length
+							? widgetsByGroup.set(originGroupId, new Set(originGroupWidgets))
 							: widgetsByGroup.delete(originGroupId);
 
-						const currentGroupWidgets =
-							widgetsByGroup.get(currentGroup.i) || new Set();
+						// originGroupWidgets.delete(originItem.i);
+						// originGroupWidgets.size
+						// 	? widgetsByGroup.set(originGroupId, originGroupWidgets)
+						// 	: widgetsByGroup.delete(originGroupId);
 
-						currentGroupWidgets.add(originItem.i);
-						widgetsByGroup.set(currentGroup.i, currentGroupWidgets);
+						// const currentGroupWidgets =
+						// 	widgetsByGroup.get(currentGroup.i) || new Set();
 
+						// currentGroupWidgets.add(originItem.i);
+						// widgetsByGroup.set(currentGroup.i, currentGroupWidgets);
+
+						console.log(
+							"🚀 ~ file: grid-container.tsx ~ line 646 ~ changeWidgetsByGroup ~ widgetsByGroup",
+							widgetsByGroup,
+						);
 						return widgetsByGroup;
 					});
-
-					// 상태 저장
-					changeAllItems((allItems) => {
-						allItems = new Map(allItems);
-						layout.forEach((item) =>
-							allItems.set(item.i, {
-								...(allItems.get(item.i) as ItemProps),
-								...item,
-							}),
-						);
-						return allItems;
-					});
-
-					// 이동한 그룹이 닫힌 그룹일 때는 오픈 처리함
-					if (closedGroups.has(currentGroup.i))
-						onClickGroupCollapse({
-							groupId: currentGroup.i,
-							groupY: currentGroup.y,
-						});
-
-					return;
 				}
 
-				// 원 그룹 내 이동인 경우
-
-				// 그룹 소속 위젯 IDs
-				const widgetIds = widgetsByGroup.get(originGroupId) as Set<string>;
-
-				// 그룹의 원래 높이
-				const originGroupHeight = Math.max.apply(
-					null,
-					[...widgetIds].map((widgetId) => {
-						const { y, h } = allItems.get(widgetId) as ItemProps;
-						return y + h;
-					}),
-				);
-
-				// 현재 그룹 높이 체크
-				const currentGroupHeight = Math.max.apply(
-					null,
-					[...widgetIds].map((widgetId) => {
-						const { y, h } = layout.find(
-							({ i }) => i === widgetId,
-						) as ItemProps;
-						return y + h;
-					}),
-				);
-
-				// 그룹 높이가 같으면 y값 변동이 없으므로 현재 위젯 상태만 업데이트 함
-				if (originGroupHeight === currentGroupHeight)
-					return changeAllItems((allItems) => {
-						allItems = new Map(allItems);
-
-						const widgetId = changedItem.i;
-
-						allItems.set(widgetId, {
-							...(allItems.get(widgetId) as ItemProps),
-							...changedItem,
-						});
-
-						return allItems;
-					});
-			}
-
-			// 그룹 이동 또는 위젯이지만 그룹 변동 없고 내부 높이가 달라진 경우
-			changeAllItems((allItems) => {
-				allItems = new Map(allItems);
-
-				layout.forEach((changedItem) => {
-					const itemId = changedItem.i;
-					const originItem = allItems.get(itemId) as ItemProps;
-
-					// 변경된 y값 (최대 높이 제한)
-					const itemY = Math.min(
-						changedItem.y,
-						Math.max.apply(
-							null,
-							combinedItems.map(({ y, h }) => y + h),
-						),
-					);
+				layout.forEach((item) => {
+					const itemId = item.i;
+					const originValue = items.get(itemId) as ItemProps;
+					const originY = originValue.y;
 
 					// changedItem이 닫힌 그룹이면서 y값 변동이 있는 경우 수동으로 하위 위젯 y값도 변동값 반영해줘야 함
-					if (
-						closedGroups.has(itemId) &&
-						originItem.y !== itemY &&
-						widgetsByGroup.has(itemId)
-					) {
-						const movedYvalue = itemY - originItem.y;
+					if (closedGroups.has(itemId) && widgetsByGroup.has(itemId)) {
+						const movedYvalue = originY - item.y;
 
 						[...(widgetsByGroup.get(itemId) as Set<string>)].forEach(
 							(widgetId) => {
 								const { y: originY, ...widget } = allItems.get(
 									widgetId,
 								) as ItemProps;
-								allItems.set(widgetId, { ...widget, y: originY + movedYvalue });
+								items.set(widgetId, { ...widget, y: originY + movedYvalue });
 							},
 						);
 					}
 
-					// 변경된 값 모두 반영
-					allItems.set(itemId, { ...originItem, ...changedItem, y: itemY });
+					item.i === originItem.i
+						? items.set(itemId, {
+								...originValue,
+								...item,
+								y: currentItemY,
+						  })
+						: items.set(itemId, { ...originValue, ...item });
 				});
+			}
 
-				return allItems;
-			});
+			// const newCombinedItems = [...items.values()].filter(
+			// 	(item) => !closedWidgets.has(item.i),
+			// );
+
+			// changeLayouts({});
+
+			// changeLayouts({
+			// 	lg: newCombinedItems,
+			// 	md: newCombinedItems,
+			// 	sm: newCombinedItems,
+			// });
+
+			changeAllItems(items);
+			// ---------------------------
+
+			// layout.forEach((changedItem) => {
+			// 	const itemId = changedItem.i;
+			// 	const currentItem = items.get(itemId) as ItemProps;
+
+			// 	// 변경된 y값 (최대 높이 제한)
+			// 	const itemY = Math.min(
+			// 		changedItem.y,
+			// 		Math.max.apply(
+			// 			null,
+			// 			combinedItems.map(({ y, h }) => y + h),
+			// 		),
+			// 	);
+			// });
+
+			// --------------------------
+
+			// // 위젯 이동인 경우
+			// if (!groups.has(originItem.i)) {
+			// 	// 원 소속 그룹 ID
+			// 	const originGroupId = getGroupId({ widgetId: originItem.i });
+
+			// 	// 현 이동 위치의 그룹 파악
+			// 	const currentGroup = [...groups]
+			// 		.map((groupId) => layout.find(({ i }) => i === groupId) as ItemProps)
+			// 		.sort(({ y: a }, { y: b }) => b - a)
+			// 		.find(({ y }) => y < changedItem.y) as ItemProps;
+
+			// 	// 그룹 ID 다르면 소속 그룹 변경 처리
+			// 	if (originGroupId !== currentGroup.i) {
+			// 		// 그룹 변경
+			// 		changeWidgetsByGroup((widgetsByGroup) => {
+			// 			widgetsByGroup = new Map(widgetsByGroup);
+
+			// 			const originGroupWidgets = widgetsByGroup.get(
+			// 				originGroupId,
+			// 			) as Set<string>;
+
+			// 			originGroupWidgets.delete(originItem.i);
+			// 			originGroupWidgets.size
+			// 				? widgetsByGroup.set(originGroupId, originGroupWidgets)
+			// 				: widgetsByGroup.delete(originGroupId);
+
+			// 			const currentGroupWidgets =
+			// 				widgetsByGroup.get(currentGroup.i) || new Set();
+
+			// 			currentGroupWidgets.add(originItem.i);
+			// 			widgetsByGroup.set(currentGroup.i, currentGroupWidgets);
+
+			// 			return widgetsByGroup;
+			// 		});
+
+			// 		// 상태 저장
+			// 		changeAllItems((allItems) => {
+			// 			allItems = new Map(allItems);
+			// 			layout.forEach((item) =>
+			// 				allItems.set(item.i, {
+			// 					...(allItems.get(item.i) as ItemProps),
+			// 					...item,
+			// 				}),
+			// 			);
+			// 			return allItems;
+			// 		});
+
+			// 		// 이동한 그룹이 닫힌 그룹일 때는 오픈 처리함
+			// 		if (closedGroups.has(currentGroup.i))
+			// 			onClickGroupCollapse({
+			// 				groupId: currentGroup.i,
+			// 				groupY: currentGroup.y,
+			// 			});
+
+			// 		return;
+			// 	}
+
+			// 	// 원 그룹 내 이동인 경우
+
+			// 	// 그룹 소속 위젯 IDs
+			// 	const widgetIds = widgetsByGroup.get(originGroupId) as Set<string>;
+
+			// 	// 그룹의 원래 높이
+			// 	const originGroupHeight = Math.max.apply(
+			// 		null,
+			// 		[...widgetIds].map((widgetId) => {
+			// 			const { y, h } = allItems.get(widgetId) as ItemProps;
+			// 			return y + h;
+			// 		}),
+			// 	);
+
+			// 	// 현재 그룹 높이 체크
+			// 	const currentGroupHeight = Math.max.apply(
+			// 		null,
+			// 		[...widgetIds].map((widgetId) => {
+			// 			const { y, h } = layout.find(
+			// 				({ i }) => i === widgetId,
+			// 			) as ItemProps;
+			// 			return y + h;
+			// 		}),
+			// 	);
+
+			// 	// 그룹 높이가 같으면 y값 변동이 없으므로 현재 위젯 상태만 업데이트 함
+			// 	if (originGroupHeight === currentGroupHeight)
+			// 		return changeAllItems((allItems) => {
+			// 			allItems = new Map(allItems);
+
+			// 			const widgetId = changedItem.i;
+
+			// 			allItems.set(widgetId, {
+			// 				...(allItems.get(widgetId) as ItemProps),
+			// 				...changedItem,
+			// 			});
+
+			// 			return allItems;
+			// 		});
+			// }
+
+			// // 그룹 이동 또는 위젯이지만 그룹 변동 없고 내부 높이가 달라진 경우
+			// changeAllItems((allItems) => {
+			// 	allItems = new Map(allItems);
+
+			// 	layout.forEach((changedItem) => {
+			// 		const itemId = changedItem.i;
+			// 		const originItem = allItems.get(itemId) as ItemProps;
+
+			// 		// 변경된 y값 (최대 높이 제한)
+			// 		const itemY = Math.min(
+			// 			changedItem.y,
+			// 			Math.max.apply(
+			// 				null,
+			// 				combinedItems.map(({ y, h }) => y + h),
+			// 			),
+			// 		);
+
+			// 		// changedItem이 닫힌 그룹이면서 y값 변동이 있는 경우 수동으로 하위 위젯 y값도 변동값 반영해줘야 함
+			// 		if (
+			// 			closedGroups.has(itemId) &&
+			// 			originItem.y !== itemY &&
+			// 			widgetsByGroup.has(itemId)
+			// 		) {
+			// 			const movedYvalue = itemY - originItem.y;
+
+			// 			[...(widgetsByGroup.get(itemId) as Set<string>)].forEach(
+			// 				(widgetId) => {
+			// 					const { y: originY, ...widget } = allItems.get(
+			// 						widgetId,
+			// 					) as ItemProps;
+			// 					allItems.set(widgetId, { ...widget, y: originY + movedYvalue });
+			// 				},
+			// 			);
+			// 		}
+
+			// 		// 변경된 값 모두 반영
+			// 		allItems.set(itemId, { ...originItem, ...changedItem, y: itemY });
+			// 	});
+
+			// 	return allItems;
+			// });
 		},
-		[
-			allItems,
-			closedGroups,
-			combinedItems,
-			getGroupId,
-			groups,
-			onClickGroupCollapse,
-			widgetsByGroup,
-		],
+		[allItems, closedGroups, getGroupId, groups, widgetsByGroup],
 	);
 
 	// NOTE 위젯 사이즈 변경 시 처리
@@ -642,6 +1000,8 @@ const GridContainer = () => {
 			  )}`
 			: `0`;
 	}, []);
+
+	console.log("allItems: ", allItems);
 
 	return (
 		<Container>
